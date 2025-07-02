@@ -4,6 +4,9 @@ author: "Jack (U0792RSM26A)"
 description: "A rpi alarm clock that reads the news to me in the morning"
 created_at: "6/22/2025"
 ---
+## July 1 - 3.5h
+I worked on trying to optimize the BOM, since I am currently above the $50 budget, but I think I can get it within. Originally, I bought a few things from adafruit. They had a shipping cost of six dollars, but I was able to find similarly priced items with free shipping (Vilros for rpi, aliexpress for small components). I also originally wanted to use a waveshare screen, even though I knew it would be expensive. The shipping was absurd though (\$15), and I would be paying half of my budget just to the screen. I was able to find another screen on aliexpress that did have good drawings, so I will remodel around that. Using the aliexpress screen will probably free up twenty dollars, so I will hopefully have room for a power supply, screw kit, and resistor kit. I also got chatgpt to write some code for it - its in main.py. 
+
 ## June 30 - 3h
 Finished the case! My onshape rendering was bugging a bit so the colors might look a bit funny. Here's the final image:
 ![](https://github.com/jayman-cooks/news_clock/blob/main/full_final_case.jpg)
