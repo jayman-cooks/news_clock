@@ -1,0 +1,7 @@
+$16.50: RPI 2W https://vilros.com/products/raspberry-pi-zero-2-w?src=raspberrypi
+$8.25: RPI power cable https://www.adafruit.com/product/1995
+$3.72: speaker https://www.aliexpress.us/item/3256806076864137.html
+$2.80: amplifier https://www.aliexpress.us/item/3256808626276739.html
+$1.25: Buttons https://www.aliexpress.us/item/2255800980685095.html
+$11.99: Lcd screen https://www.waveshare.com/product/displays/lcd-oled/lcd-oled-3/1.9inch-lcd-module.htm
+$15: waveshare shipping (cheapest)
