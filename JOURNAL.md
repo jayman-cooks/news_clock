@@ -4,8 +4,11 @@ author: "Jack (U0792RSM26A)"
 description: "A rpi alarm clock that reads the news to me in the morning"
 created_at: "6/22/2025"
 ---
+## Total time: 15 hours
+
 ## July 4 - 2h
-I finally made a circuit diagram after a lot of work yesterday (mostly thanks to Yash). I moved the old files for the case to avoid confusion. They are now in old case files. I added all the formating required for submissions. 
+I finally made a circuit diagram after a lot of work yesterday (mostly thanks to Yash). I moved the old files for the case to avoid confusion. They are now in old case files. I added all the formating required for submissions. I think I'm ready to submit!
+![](https://github.com/jayman-cooks/news_clock/blob/main/circuit_diagram.png)
 
 ## July 3 - 3h
 I didnt realize the deadline was coming up so closely, so I've made quite a few changes to account for that. For one, I descoped the project quite a bit. I'm planning on using a bluetooth speaker, and I'm going to be using hot glue instead of worrying about press fits. I also had to find parts from amazon so they would arrive in time instead of aliexpress. I had to change the case design a bit because of this (which was very annoying to do because I had caded everything form the og screen file). New files are called new_case_bottom.stl and new_case_top.stl . Deepseek and I wrote some better code, which now includes a simulated version for non rpi hardware. I also spent a lot of time trying to figure out how to make a wiring diagram without success. 
