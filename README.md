@@ -3,9 +3,9 @@ This my project for an alarm clock that reads you headlines from the New York Ti
 
 ### Important Files
 The case is in new_case_top.stl and new_case_bottom.stl. 
-
-My wiring diagram is in circuit_diagram.png. 
-
+![](https://github.com/jayman-cooks/news_clock/blob/main/final_case_fr.jpg)
+My wiring diagram is in circuit_diagram.png. I don't have a pcb.
+![](https://github.com/jayman-cooks/news_clock/blob/main/circuit_diagram.png)
 My code for running the alarm clock is in main.py and news.py. Main.py also has a simulator so you can run it on a normal computer as well. 
 
 
