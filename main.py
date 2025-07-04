@@ -215,7 +215,7 @@ class AlarmClockHardware:
             import RPi.GPIO as GPIO
             GPIO.setmode(GPIO.BCM)
             buttons = {
-                "MODE": 5,
+                "MODE": 4,
                 "UP": 6,
                 "DOWN": 13,
                 "SET": 19,

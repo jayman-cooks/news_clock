@@ -1,4 +1,0 @@
-$16.50: RPI 2W https://vilros.com/products/raspberry-pi-zero-2-w?src=raspberrypi
-$6.98 wires https://www.amazon.com/Elegoo-EL-CP-004-Multicolored-Breadboard-arduino/dp/B01EV70C78
-$5.99: Buttons https://www.amazon.com/QTEATAK-Momentary-Tactile-Button-Switch/dp/B07VSNN9S2
-$12.99: Lcd screen https://www.amazon.com/Display-Screen-Module-High-Definition-170x320/dp/B0DDKJJD68?crid=3N6NBOSZFDQG8
