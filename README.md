@@ -10,7 +10,7 @@ My code for running the alarm clock is in main.py and news.py. Main.py also has 
 
 
 ### BOM
-My BOM is also in BOM.csv
+My BOM is also in BOM.csv. I already have the bluetooth speaker and power cable that I will use. 
 
 | name        | price  | url                                                                                |
 |-------------|--------|------------------------------------------------------------------------------------|
