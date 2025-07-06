@@ -1,4 +1,4 @@
-# Raspberry Pi News Alarm Clock
+# ESP32 News Alarm Clock
 This my project for an alarm clock that reads you headlines from the New York Times every morning. I made it because I hadn't seen anything like it before, and I thought it would be cool to have the news read to me as I get ready in the morning. It is important to be informed about what is happening in the world, and now you can do it even when you are busy!
 
 ### Important Files

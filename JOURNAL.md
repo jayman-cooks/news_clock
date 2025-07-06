@@ -6,6 +6,9 @@ created_at: "6/22/2025"
 ---
 ## Total time: 15 hours
 
+## July 5 - 1.5h
+I was told to use an esp-32 instead of a rpi, so I made that change. It made a few complications in terms of audio and TTS, but I think I resolved them. I also changed all of my stuff from amazon to aliexpress (changing vendors again guhhh). New circuit diagram but with same name. 
+
 ## July 4 - 2h
 I finally made a circuit diagram after a lot of work yesterday (mostly thanks to Yash). I moved the old files for the case to avoid confusion. They are now in old case files. I added all the formating required for submissions. I think I'm ready to submit!
 ![](https://github.com/jayman-cooks/news_clock/blob/main/circuit_diagram.png)
