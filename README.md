@@ -10,11 +10,15 @@ My code for running the alarm clock is in main.py and news.py. Main.py also has 
 
 
 ### BOM
-My BOM is also in BOM.csv. I already have the bluetooth speaker and power cable that I will use. 
+My BOM is also in BOM.csv. I already have a bluetooth speaker to use. All shipping is free. 
 
-| name        | price  | url                                                                                |
-|-------------|--------|------------------------------------------------------------------------------------|
-| RPI 2w zero | $16.5  | https://vilros.com/products/raspberry-pi-zero-2-w                                  |
-| Wires       | $4.99  | https://www.amazon.com/WWZMDiB-120Pcs-Multicolored-Breadboard-Jumper/dp/B0B2L66ZFM |
-| Buttons     | $5.99  | https://www.amazon.com/QTEATAK-Momentary-Tactile-Button-Switch/dp/B07VSNN9S2       |
-| lcd screen  | $12.99 | https://www.amazon.com/Display-Screen-Module-High-Definition-170x320/dp/B0DDKJJD68 |
+| name            | price | url                                                                                   |
+|-----------------|-------|---------------------------------------------------------------------------------------|
+| ESP32           | $5.33 | https://www.aliexpress.us/item/3256808104812340.html                                  |
+| Wires(M-F 15cm) | $2.99 | https://www.aliexpress.us/item/3256801814340687.html                                  |
+| Wires(F-F 15cm) | $3.02 | https://www.aliexpress.us/item/3256801814340687.html                                  |
+| Buttons(6x6x9)  | $1.21 | https://www.aliexpress.us/item/2255800980685095.html                                  |
+| LCD screen      | $5.56 | www.aliexpress.us/item/3256806693177158.html                                          |
+| Power Cable     | $4.98 | https://www.aliexpress.us/item/2251801841117284.html      
+| Taxes           | $4.50 |       |
+Total: $27.59

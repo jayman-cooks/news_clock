@@ -1,12 +1,347 @@
+import machine
+import st7789
 import time
-import datetime
-import threading
-import pygame
-import os
+import utime
 import random
 import sys
+import os
+import urequests
+import ubinascii
+import ujson
+from machine import Pin, SPI, PWM
+import uos
+import network
 from news import get_headlines
-from PIL import Image, ImageDraw, ImageFont
+
+# =============================================================================
+# ESP32 HARDWARE IMPLEMENTATION WITH BLUETOOTH AUDIO
+# =============================================================================
+class AlarmClockESP32:
+    def __init__(self):
+        # Initialize display
+        self.width = 170
+        self.height = 320
+        self.init_display()
+
+        # Initialize buttons
+        self.init_buttons()
+
+        # Initialize Wi-Fi
+        self.wifi_connected = False
+        self.connect_wifi()
+
+        # Alarm state
+        self.alarm_time = (7, 30)  # (hour, minute)
+        self.alarm_enabled = True
+        self.alarm_ringing = False
+        self.setting_mode = False
+        self.setting_index = 0  # 0=hour, 1=minute
+        self.last_alarm_trigger = 0
+
+        # Bluetooth state
+        self.bt_speaker_connected = False
+        self.init_bluetooth()
+
+    def init_display(self):
+        """Initialize ST7789 display"""
+        spi = SPI(
+            2,
+            baudrate=40000000,
+            sck=Pin(18),
+            mosi=Pin(23),
+            miso=Pin(19)
+        )
+        self.disp = st7789.ST7789(
+            spi,
+            self.width,
+            self.height,
+            reset=Pin(4, Pin.OUT),
+            dc=Pin(2, Pin.OUT),
+            cs=Pin(5, Pin.OUT),
+            backlight=Pin(12, Pin.OUT),
+            rotation=1,
+        )
+        self.disp.init()
+        self.disp.fill(st7789.BLACK)
+
+    def init_buttons(self):
+        """Initialize buttons with debounce"""
+        self.buttons = {
+            "MODE": Pin(32, Pin.IN, Pin.PULL_UP),
+            "UP": Pin(33, Pin.IN, Pin.PULL_UP),
+            "DOWN": Pin(25, Pin.IN, Pin.PULL_UP),
+            "SET": Pin(26, Pin.IN, Pin.PULL_UP),
+            "ALARM": Pin(27, Pin.IN, Pin.PULL_UP),
+        }
+        self.last_button_state = {name: 1 for name in self.buttons}
+        self.last_debounce_time = {name: 0 for name in self.buttons}
+        self.debounce_delay = 50  # ms
+
+    def connect_wifi(self):
+        """Connect to Wi-Fi for TTS service"""
+        ssid = "YOUR_WIFI_SSID"
+        password = "YOUR_WIFI_PASSWORD"
+
+        wlan = network.WLAN(network.STA_IF)
+        wlan.active(True)
+        if not wlan.isconnected():
+            print("Connecting to Wi-Fi...")
+            wlan.connect(ssid, password)
+
+            # Wait for connection
+            for _ in range(20):
+                if wlan.isconnected():
+                    break
+                time.sleep(1)
+
+        self.wifi_connected = wlan.isconnected()
+        if self.wifi_connected:
+            print("Wi-Fi connected:", wlan.ifconfig())
+        else:
+            print("Wi-Fi connection failed")
+
+    def init_bluetooth(self):
+        """Initialize Bluetooth A2DP sink"""
+        try:
+            import a2dp
+            # Initialize A2DP sink
+            self.a2dp = a2dp.A2dpSink()
+            self.a2dp.start()
+            print("Bluetooth A2DP sink started. Device name:", self.a2dp.get_device_name())
+            print("Pair with your speaker and connect to ESP32")
+            self.bt_available = True
+        except ImportError:
+            print("a2dp library not available")
+            self.bt_available = False
+        except Exception as e:
+            print("Bluetooth init failed:", str(e))
+            self.bt_available = False
+
+    def is_bluetooth_connected(self):
+        """Check if Bluetooth speaker is connected"""
+        if not self.bt_available:
+            return False
+        return self.a2dp.is_connected()
+
+    def get_message_text(self):
+        """Generate message text for TTS"""
+        quotes = [
+            "Good morning! Time to start your day.",
+            "Rise and shine! A new day awaits.",
+            "Wake up! Your adventures begin now.",
+            "Hello world! Time to be productive."
+        ]
+        return get_headlines()
+
+    def text_to_speech(self, text):
+        """Convert text to speech using Google TTS"""
+        if not self.wifi_connected:
+            print("Wi-Fi not connected. Cannot use TTS")
+            return None
+
+        try:
+            # Google TTS API endpoint
+            url = "http://translate.google.com/translate_tts"
+
+            # Request parameters
+            params = {
+                'ie': 'UTF-8',
+                'q': text,
+                'tl': 'en',
+                'client': 'tw-ob'
+            }
+
+            # Headers to mimic a browser
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+            }
+
+            # Send request
+            response = urequests.get(url, params=params, headers=headers)
+
+            if response.status_code == 200:
+                return response.content
+            else:
+                print("TTS request failed:", response.status_code)
+                return None
+
+        except Exception as e:
+            print("TTS error:", str(e))
+            return None
+
+    def play_audio(self, audio_data):
+        """Play audio through Bluetooth speaker"""
+        if not self.bt_available or not self.is_bluetooth_connected():
+            print("Bluetooth not available or speaker not connected")
+            return False
+
+        try:
+            print("Playing audio...")
+            self.a2dp.play(audio_data)
+            return True
+        except Exception as e:
+            print("Playback failed:", str(e))
+            return False
+
+    def trigger_alarm(self):
+        """Trigger alarm with TTS over Bluetooth"""
+        self.alarm_ringing = True
+        message = self.get_message_text()
+        print("ALARM! Message:", message)
+
+        # Get TTS audio
+        audio = self.text_to_speech(message)
+
+        if audio:
+            # Play through Bluetooth
+            if not self.play_audio(audio):
+                print("Failed to play through Bluetooth")
+        else:
+            print("TTS generation failed")
+
+    def update_display(self):
+        """Update the physical display"""
+        # Get current time
+        current_time = utime.localtime()
+        time_str = "{:02d}:{:02d}:{:02d}".format(
+            current_time[3], current_time[4], current_time[5]
+        )
+
+        # Clear display
+        self.disp.fill(st7789.BLACK)
+
+        # Draw time
+        self.disp.text(
+            "Arial_16",
+            time_str,
+            60,
+            40,
+            st7789.WHITE,
+            st7789.BLACK
+        )
+
+        # Draw alarm status
+        alarm_status = "Alarm: {:02d}:{:02d}".format(
+            self.alarm_time[0], self.alarm_time[1]
+        )
+        self.disp.text(
+            "Arial_16",
+            alarm_status,
+            60,
+            80,
+            st7789.GREEN if self.alarm_enabled else st7789.RED,
+            st7789.BLACK
+        )
+
+        # Draw setting indicator
+        if self.setting_mode:
+            mode_text = ["SET HOUR", "SET MINUTE"][self.setting_index]
+            self.disp.text(
+                "Arial_16",
+                mode_text,
+                60,
+                120,
+                st7789.YELLOW,
+                st7789.BLACK
+            )
+
+        # Draw connection status
+        bt_status = "BT: " + ("Connected" if self.is_bluetooth_connected() else "Disconnected")
+        self.disp.text(
+            "Arial_16",
+            bt_status,
+            60,
+            150,
+            st7789.CYAN if self.is_bluetooth_connected() else st7789.RED,
+            st7789.BLACK
+        )
+
+        # Draw alarm ringing indicator
+        if self.alarm_ringing:
+            self.disp.text(
+                "Arial_16",
+                "ALARM!",
+                200,
+                40,
+                st7789.RED,
+                st7789.BLACK
+            )
+
+    def check_buttons(self):
+        """Check button states with debounce"""
+        current_time = utime.ticks_ms()
+        for name, button in self.buttons.items():
+            current_state = button.value()
+
+            # Reset button state if debounce time has passed
+            if current_state != self.last_button_state[name]:
+                self.last_debounce_time[name] = current_time
+
+            if (current_time - self.last_debounce_time[name]) > self.debounce_delay:
+                if current_state == 0 and self.last_button_state[name] == 1:
+                    self.handle_button(name)
+
+            self.last_button_state[name] = current_state
+
+    def handle_button(self, name):
+        """Handle button press"""
+        if name == "MODE":  # MODE button
+            self.setting_mode = not self.setting_mode
+            self.setting_index = 0
+
+        elif name == "UP":  # UP button
+            if self.setting_mode:
+                if self.setting_index == 0:
+                    self.alarm_time = ((self.alarm_time[0] + 1) % 24, self.alarm_time[1])
+                else:
+                    self.alarm_time = (self.alarm_time[0], (self.alarm_time[1] + 1) % 60)
+
+        elif name == "DOWN":  # DOWN button
+            if self.setting_mode:
+                if self.setting_index == 0:
+                    self.alarm_time = ((self.alarm_time[0] - 1) % 24, self.alarm_time[1])
+                else:
+                    self.alarm_time = (self.alarm_time[0], (self.alarm_time[1] - 1) % 60)
+
+        elif name == "SET":  # SET button
+            if self.setting_mode:
+                self.setting_index = (self.setting_index + 1) % 2
+            elif self.alarm_ringing:
+                self.alarm_ringing = False
+
+        elif name == "ALARM":  # ALARM ON/OFF button
+            self.alarm_enabled = not self.alarm_enabled
+
+    def check_alarm(self):
+        """Check if alarm should trigger"""
+        current_time = utime.localtime()
+        current_hour = current_time[3]
+        current_minute = current_time[4]
+        current_second = current_time[5]
+
+        # Only trigger once per minute
+        if (self.alarm_enabled and
+                current_hour == self.alarm_time[0] and
+                current_minute == self.alarm_time[1] and
+                current_second < 5 and  # Trigger during first 5 seconds of the minute
+                not self.alarm_ringing and
+                time.time() - self.last_alarm_trigger > 55):  # Prevent retriggering
+
+            self.last_alarm_trigger = time.time()
+            threading.Thread(target=self.trigger_alarm).start()
+
+    def run(self):
+        """Main hardware loop"""
+        try:
+            while True:
+                self.check_buttons()
+                self.check_alarm()
+                self.update_display()
+                time.sleep(0.1)
+        except KeyboardInterrupt:
+            if hasattr(self, 'a2dp') and self.bt_available:
+                self.a2dp.stop()
+            self.disp.fill(st7789.BLACK)
 
 
 # =============================================================================
@@ -15,6 +350,7 @@ from PIL import Image, ImageDraw, ImageFont
 class AlarmClockSimulator:
     def __init__(self):
         # Initialize pygame for simulation
+        import pygame
         pygame.init()
         self.screen = pygame.display.set_mode((320, 170))
         pygame.display.set_caption("Alarm Clock Simulator")
@@ -32,12 +368,13 @@ class AlarmClockSimulator:
         ]
 
         # Alarm state
-        self.current_time = datetime.datetime.now()
+        self.current_time = time.localtime()
         self.alarm_time = (7, 30)  # (hour, minute)
         self.alarm_enabled = True
         self.alarm_ringing = False
         self.setting_mode = False  # True when setting alarm time
         self.setting_index = 0  # 0=hour, 1=minute
+        self.bt_connected = False
 
     def get_message_text(self):
         """Generate message text for TTS"""
@@ -54,7 +391,7 @@ class AlarmClockSimulator:
         self.screen.fill((0, 0, 0))  # Clear screen
 
         # Draw current time
-        time_str = self.current_time.strftime("%H:%M:%S")
+        time_str = time.strftime("%H:%M:%S", self.current_time)
         time_surface = self.font.render(time_str, True, (255, 255, 255))
         self.screen.blit(time_surface, (100, 30))
 
@@ -69,6 +406,12 @@ class AlarmClockSimulator:
             mode_text = ["SET HOUR", "SET MINUTE"][self.setting_index]
             mode_surface = self.small_font.render(mode_text, True, (255, 255, 0))
             self.screen.blit(mode_surface, (100, 100))
+
+        # Draw Bluetooth status
+        bt_status = "BT: " + ("Connected" if self.bt_connected else "Disconnected")
+        bt_surface = self.small_font.render(bt_status, True,
+                                            (0, 255, 255) if self.bt_connected else (255, 0, 0))
+        self.screen.blit(bt_surface, (100, 140))
 
         # Draw alarm ringing indicator
         if self.alarm_ringing:
@@ -114,24 +457,30 @@ class AlarmClockSimulator:
 
         elif index == 4:  # ALARM ON/OFF
             self.alarm_enabled = not self.alarm_enabled
+            # Simulate Bluetooth connection
+            if self.alarm_enabled:
+                self.bt_connected = True
+            else:
+                self.bt_connected = False
 
     def check_alarm(self):
         """Check if alarm should trigger"""
+        self.current_time = time.localtime()
         if (self.alarm_enabled and not self.alarm_ringing and
-                self.current_time.hour == self.alarm_time[0] and
-                self.current_time.minute == self.alarm_time[1] and
-                self.current_time.second == 0):
+                self.current_time.tm_hour == self.alarm_time[0] and
+                self.current_time.tm_min == self.alarm_time[1] and
+                self.current_time.tm_sec == 0):
             self.alarm_ringing = True
             message = self.get_message_text()
-            print(f"ALARM! Message: {message}")
-            # In real implementation, this would trigger TTS
+            print(f"ALARM! Message: {message} (would play through Bluetooth)")
 
     def run_simulation(self):
         """Main simulation loop"""
+        import pygame
         running = True
         while running:
             # Update time
-            self.current_time = datetime.datetime.now()
+            self.current_time = time.localtime()
 
             # Handle events
             for event in pygame.event.get():
@@ -154,235 +503,15 @@ class AlarmClockSimulator:
 
 
 # =============================================================================
-# HARDWARE IMPLEMENTATION (For Raspberry Pi)
-# =============================================================================
-class AlarmClockHardware:
-    def __init__(self):
-        # Display setup
-        self.disp = self.setup_display()
-        self.width = 170
-        self.height = 320
-        self.image = Image.new('RGB', (self.height, self.width), (0, 0, 0))
-        self.draw = ImageDraw.Draw(self.image)
-
-        try:
-            self.font_large = ImageFont.truetype("DejaVuSans-Bold.ttf", 36)
-            self.font_small = ImageFont.truetype("DejaVuSans.ttf", 18)
-        except:
-            # Fallback fonts
-            self.font_large = ImageFont.load_default()
-            self.font_small = ImageFont.load_default()
-
-        # Button setup
-        self.buttons = self.setup_buttons()
-
-        # Alarm state
-        self.alarm_time = (7, 30)  # (hour, minute)
-        self.alarm_enabled = True
-        self.alarm_ringing = False
-        self.setting_mode = False
-        self.setting_index = 0  # 0=hour, 1=minute
-
-        # Text-to-Speech setup
-        self.setup_tts()
-
-    def setup_display(self):
-        """Initialize SPI display"""
-        try:
-            import ST7789
-            disp = ST7789.ST7789(
-                port=0,
-                cs=0,  # Change if using different CS pin
-                dc=24,
-                rst=25,
-                backlight=5,
-                width=170,
-                height=320,
-                rotation=90,
-                spi_speed_hz=60 * 1000 * 1000
-            )
-            return disp
-        except ImportError:
-            print("Display driver not found. Running in simulation mode.")
-            return None
-        except Exception as e:
-            print(f"Display initialization failed: {str(e)}")
-            return None
-
-    def setup_buttons(self):
-        """Initialize GPIO buttons"""
-        try:
-            import RPi.GPIO as GPIO
-            GPIO.setmode(GPIO.BCM)
-            buttons = {
-                "MODE": 4,
-                "UP": 6,
-                "DOWN": 13,
-                "SET": 19,
-                "ALARM": 26
-            }
-            for pin in buttons.values():
-                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            return buttons
-        except ImportError:
-            print("GPIO library not found. Buttons disabled.")
-            return None
-        except Exception as e:
-            print(f"Button initialization failed: {str(e)}")
-            return None
-
-    def setup_tts(self):
-        """Initialize text-to-speech"""
-        try:
-            import pyttsx3
-            self.tts_engine = pyttsx3.init()
-            self.tts_engine.setProperty('rate', 150)
-            self.tts_engine.setProperty('volume', 1.0)
-        except ImportError:
-            print("pyttsx3 not installed. TTS disabled.")
-            self.tts_engine = None
-        except Exception as e:
-            print(f"TTS initialization failed: {str(e)}")
-            self.tts_engine = None
-
-    def get_message_text(self):
-        """Generate message text for TTS"""
-        quotes = [
-            "Good morning! Time to start your day.",
-            "Rise and shine! A new day awaits.",
-            "Wake up! Your adventures begin now.",
-            "Hello world! Time to be productive."
-        ]
-        return get_headlines()
-
-    def update_display(self):
-        """Update the physical display"""
-        if not self.disp:
-            return
-
-        # Clear display
-        self.draw.rectangle((0, 0, self.height, self.width), fill=(0, 0, 0))
-
-        # Get current time
-        current_time = datetime.datetime.now()
-        time_str = current_time.strftime("%H:%M:%S")
-
-        # Draw time
-        self.draw.text((60, 40), time_str, font=self.font_large, fill=(255, 255, 255))
-
-        # Draw alarm status
-        alarm_status = f"Alarm: {self.alarm_time[0]:02d}:{self.alarm_time[1]:02d}"
-        self.draw.text((60, 100), alarm_status, font=self.font_small,
-                       fill=(0, 255, 0) if self.alarm_enabled else (255, 0, 0))
-
-        # Draw setting indicator
-        if self.setting_mode:
-            mode_text = ["SET HOUR", "SET MINUTE"][self.setting_index]
-            self.draw.text((60, 130), mode_text, font=self.font_small, fill=(255, 255, 0))
-
-        # Draw alarm ringing indicator
-        if self.alarm_ringing:
-            self.draw.text((200, 40), "ALARM!", font=self.font_large, fill=(255, 0, 0))
-
-        # Update display
-        self.disp.display(self.image)
-
-    def check_buttons(self):
-        """Check button states"""
-        if not self.buttons:
-            return
-
-        try:
-            import RPi.GPIO as GPIO
-            # MODE button
-            if GPIO.input(self.buttons["MODE"]) == GPIO.LOW:
-                self.setting_mode = not self.setting_mode
-                self.setting_index = 0
-                time.sleep(0.2)
-
-            # UP button
-            if GPIO.input(self.buttons["UP"]) == GPIO.LOW:
-                if self.setting_mode:
-                    if self.setting_index == 0:
-                        self.alarm_time = ((self.alarm_time[0] + 1) % 24, self.alarm_time[1])
-                    else:
-                        self.alarm_time = (self.alarm_time[0], (self.alarm_time[1] + 1) % 60)
-                time.sleep(0.1)
-
-            # DOWN button
-            if GPIO.input(self.buttons["DOWN"]) == GPIO.LOW:
-                if self.setting_mode:
-                    if self.setting_index == 0:
-                        self.alarm_time = ((self.alarm_time[0] - 1) % 24, self.alarm_time[1])
-                    else:
-                        self.alarm_time = (self.alarm_time[0], (self.alarm_time[1] - 1) % 60)
-                time.sleep(0.1)
-
-            # SET button
-            if GPIO.input(self.buttons["SET"]) == GPIO.LOW:
-                if self.setting_mode:
-                    self.setting_index = (self.setting_index + 1) % 2
-                elif self.alarm_ringing:
-                    self.alarm_ringing = False
-                time.sleep(0.2)
-
-            # ALARM ON/OFF button
-            if GPIO.input(self.buttons["ALARM"]) == GPIO.LOW:
-                self.alarm_enabled = not self.alarm_enabled
-                time.sleep(0.2)
-
-        except Exception as e:
-            print(f"Button error: {str(e)}")
-
-    def trigger_alarm(self):
-        """Trigger alarm with text-to-speech"""
-        if not self.alarm_ringing:
-            return
-
-        if self.tts_engine:
-            message = self.get_message_text()
-            try:
-                self.tts_engine.say(message)
-                self.tts_engine.runAndWait()
-            except Exception as e:
-                print(f"TTS failed: {str(e)}")
-        else:
-            print("ALARM! (TTS unavailable)")
-
-    def check_alarm(self):
-        """Check if alarm should trigger"""
-        current_time = datetime.datetime.now()
-        if (self.alarm_enabled and not self.alarm_ringing and
-                current_time.hour == self.alarm_time[0] and
-                current_time.minute == self.alarm_time[1] and
-                current_time.second == 0):
-            self.alarm_ringing = True
-            # Run TTS in a separate thread to avoid blocking
-            threading.Thread(target=self.trigger_alarm, daemon=True).start()
-
-    def run(self):
-        """Main hardware loop"""
-        try:
-            while True:
-                self.check_buttons()
-                self.check_alarm()
-                self.update_display()
-                time.sleep(0.1)
-        except KeyboardInterrupt:
-            if self.buttons:
-                import RPi.GPIO as GPIO
-                GPIO.cleanup()
-
-
-# =============================================================================
 # MAIN EXECUTION
 # =============================================================================
 if __name__ == "__main__":
-    if os.name == 'nt' or os.name == 'posix' and 'DISPLAY' in os.environ:
+    # Check if we're running on ESP32 or in simulation
+    if sys.platform == 'esp32':
+        print("Running on ESP32 hardware...")
+        clock = AlarmClockESP32()
+        clock.run()
+    else:
         print("Running in simulation mode...")
         simulator = AlarmClockSimulator()
         simulator.run_simulation()
-    else:
-        print("Running on hardware...")
-        clock = AlarmClockHardware()
-        clock.run()
